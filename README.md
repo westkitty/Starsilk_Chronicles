@@ -17,7 +17,8 @@ python3 bridge-helm-launcher.py --gui
 ## Validate
 
 ```bash
-python3 -m py_compile starsilk-chronicles-final.py bridge-helm-launcher.py
+python3 -m py_compile starsilk-chronicles-final.py bridge-helm-launcher.py tools/generate_bridge_assets.py
+python3 tools/generate_bridge_assets.py
 python3 bridge-helm-launcher.py --bug-sweep
 ```
 
