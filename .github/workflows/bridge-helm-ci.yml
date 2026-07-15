@@ -1,0 +1,19 @@
+name: Bridge Helm QA
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  bridge-helm-qa:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile
+        run: python3 -m py_compile starsilk-chronicles-final.py bridge-helm-launcher.py tools/generate_bridge_assets.py
+      - name: Bug sweep
+        run: python3 bridge-helm-launcher.py --bug-sweep
