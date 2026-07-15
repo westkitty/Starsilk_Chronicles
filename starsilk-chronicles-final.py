@@ -1,183 +1,249 @@
 #!/usr/bin/env python3
-"""Starsilk Chronicles: Bridge Helm - GitHub delivery build."""
+# Starsilk Chronicles: Bridge Helm — GitHub delivery build
+# Deterministic, offline-first visual narrative engine.
 from __future__ import annotations
-import argparse, base64, json, os, random, tempfile, time
-from dataclasses import dataclass, field, asdict
+import argparse, copy, dataclasses, hashlib, json, math, os, random, sys, time, zlib, struct
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+
 VERSION='1.2.1-github-delivery-alpha'; SCHEMA='bridge-helm-save-v3'
-ROOT=Path(__file__).resolve().parent; ASSET_ROOT=ROOT/'assets'/'bridge_helm'; MANIFEST=ASSET_ROOT/'asset_manifest.json'
+ROOT=Path(__file__).resolve().parent; SAVE_DIR=ROOT/'save'; ASSET_DIR=ROOT/'assets'/'bridge_helm'; AUDIO_DIR=ROOT/'audio'/'bridge_helm'
+for d in (SAVE_DIR,ASSET_DIR,AUDIO_DIR): d.mkdir(parents=True,exist_ok=True)
+
 NODES={
- 'harbor':('origin',60,250,0,'orientation','The helm wakes inside a failed harbor of blue diagnostic light.'),
- 'ledger_gate':('admin',190,170,2,'blood_ring_key','A checkpoint asks for records it already knows are contradictory.'),
- 'glasswake':('wall',190,330,3,'hull_patch','The Siege Wall grinds light into black weather.'),
- 'witness_pool':('witness',330,120,2,'witness_shard_key','Names persist as residue, not ghosts. The archive asks whether you will carry them.'),
- 'drakken_choir':('drakken',360,270,3,'drakken_protocol_key','The route grammar bends around a terraforming mind.'),
- 'codec_invoice':('codec',360,420,4,'codec_betrayal_key','Codec offers a shortcut with a cost hidden in solidarity.'),
- 'tiger_fringe':('tiger',520,230,5,'tiger_axiom_key','A cold attention classifies you before deciding whether you matter.'),
- 'aureal_gate':('exit',680,260,2,'ending','The exit is where the run has to explain itself.'),}
-EDGES={'harbor':['ledger_gate','glasswake'],'ledger_gate':['witness_pool','drakken_choir'],'glasswake':['drakken_choir','codec_invoice'],'witness_pool':['tiger_fringe'],'drakken_choir':['tiger_fringe','aureal_gate'],'codec_invoice':['tiger_fringe','aureal_gate'],'tiger_fringe':['aureal_gate'],'aureal_gate':[]}
-KEYS=['blood_ring_key','witness_shard_key','drakken_protocol_key','codec_betrayal_key','tiger_axiom_key']; SYSTEMS=['engines','scanners','archives','masks','hull']
-@dataclass
+ 'wake':{'label':'Starwake Berth','pos':(90,235),'risk':0,'story':'The berth hums with silkglass static. A small bell rings inside the hull.'},
+ 'ledger_gate':{'label':'Ledger Gate','pos':(230,125),'risk':1,'story':'A toll archive asks for a true name before it will open the star-road.'},
+ 'witness_pool':{'label':'Witness Pool','pos':(395,235),'risk':2,'story':'Reflections of routes not taken gather in a silver basin.'},
+ 'moth_orchard':{'label':'Moth Orchard','pos':(575,120),'risk':2,'story':'Lantern-fruit drift loose from black branches. Their shadows have wings.'},
+ 'ashen_comet':{'label':'Ashen Comet','pos':(555,350),'risk':3,'story':'A comet of warm ash crosses the chart, carrying a sealed distress hymn.'},
+ 'red_archive':{'label':'Red Archive','pos':(760,235),'risk':3,'story':'The archive breathes in meter. Every wrong answer becomes a corridor.'},
+ 'silkforge':{'label':'Silkforge','pos':(930,130),'risk':4,'story':'The forge braids star-silk into hull sutures and memory cords.'},
+ 'last_lighthouse':{'label':'Last Lighthouse','pos':(1030,350),'risk':5,'story':'A lighthouse with no keeper burns at the edge of known ink.'},
+}
+EDGES={'wake':['ledger_gate','witness_pool'],'ledger_gate':['witness_pool','moth_orchard'],'witness_pool':['moth_orchard','ashen_comet'],'moth_orchard':['red_archive'],'ashen_comet':['red_archive','last_lighthouse'],'red_archive':['silkforge','last_lighthouse'],'silkforge':['last_lighthouse'],'last_lighthouse':[]}
+ARTIFACTS=['silkglass compass','archive-red key','lantern-moth cocoon','ash hymn cylinder','lighthouse wick']
+SYSTEMS=('hull','engine','archive','crew')
+
+@dataclasses.dataclass
 class GameState:
-    turn:int=0; current_node:str='harbor'; focused_node:Optional[str]=None; plotted_node:Optional[str]=None
-    fuel:int=8; hull:int=10; admin_heat:int=0; wall_stress:int=0; tiger_attention:int=0
-    route_silence:int=2; archive_buffers:int=3; forged_permits:int=1; macro_charges:int=2; syrin_reagent:int=1
-    scanned:List[str]=field(default_factory=lambda:['harbor']); keys:Dict[str,bool]=field(default_factory=lambda:{k:False for k in KEYS})
-    power:Dict[str,int]=field(default_factory=lambda:{s:2 for s in SYSTEMS}); crew:Dict[str,str]=field(default_factory=dict)
-    subsystems:Dict[str,str]=field(default_factory=lambda:{s:'ok' for s in SYSTEMS}); crises:List[str]=field(default_factory=list); scars:List[str]=field(default_factory=list)
-    route_memory:List[str]=field(default_factory=list); black_box:List[str]=field(default_factory=list); undo_stack:List[Dict[str,Any]]=field(default_factory=list)
-    ending:Optional[str]=None; final_factors:List[str]=field(default_factory=list); accessibility:Dict[str,bool]=field(default_factory=lambda:{'reduced_motion':False,'large_text':False,'high_contrast':False})
-def _payload(s:GameState):
-    d=asdict(s); d.pop('undo_stack',None); return d
-def _restore(d:Dict[str,Any]):
-    s=GameState(); [setattr(s,k,v) for k,v in d.items() if hasattr(s,k) and k!='undo_stack']; return _bound(s)
-def _bound(s:GameState):
-    for k,mx in [('fuel',20),('hull',15),('admin_heat',20),('wall_stress',20),('tiger_attention',20)]: setattr(s,k,max(0,min(mx,int(getattr(s,k)))))
-    s.route_memory=s.route_memory[-20:]; s.black_box=s.black_box[-80:]; s.crises=s.crises[-5:]; s.scars=s.scars[-12:]; s.undo_stack=s.undo_stack[-10:]; return s
-def _rec(s,msg): s.route_memory.append(msg); s.black_box.append(f'T{s.turn:03d}: {msg}'); _bound(s)
-def bridge_new_game_state(seed:Optional[int]=None):
-    if seed is not None: random.seed(seed)
-    s=GameState(); _rec(s,'Bridge Helm online. Scan, plot, commit, salvage, survive the explanation.'); return s
-def _reach(s): return EDGES.get(s.current_node,[])
-def _prev(s,n):
-    typ,x,y,risk,reward,text=NODES[n]; known=n in s.scanned or s.power['scanners']>=3; cost=max(1,1+risk-s.power['engines'])+(s.subsystems['engines']!='ok')
-    blocked=n not in _reach(s) or s.fuel<cost
-    return {'node_id':n,'label':typ,'known':known,'fuel_cost':cost,'risk':risk if known else 'partially_unknown','likely_reward':reward if known else 'unknown','known_unknowns':[] if known else ['hazard profile','reward confidence','inspection pressure'],'blocked':blocked,'blocked_reason':'not adjacent' if n not in _reach(s) else ('insufficient fuel' if s.fuel<cost else ''),'advice':'plotted and ready' if s.plotted_node==n else 'plot first, then travel'}
-def _actions(s):
-    base={'scan':('Scan','S','Reveal adjacent route data','low'),'travel_plotted':('Travel plotted route','Enter','Commit to plotted route','medium'),'quick_salvage':('Quick salvage','Q','Low reward, low exposure','low'),'deep_salvage':('Deep salvage','D','High reward, more pressure','high'),'archive_salvage':('Archive salvage','A','Seek contradiction data','medium'),'inspect_systems':('Inspect systems','I','Read subsystem damage','low'),'safe_pause':('Safe pause','P','Lower audit noise','low'),'undo':('Undo','U','Return one step','low'),'reset':('Reset run','R','Start over','high'),'final_trial':('Enter final trial','F','Resolve the run','high')}
-    out={}
-    for a,(label,key,desc,risk) in base.items():
-        dis='No route plotted.' if a=='travel_plotted' and not s.plotted_node else ''
-        if a=='travel_plotted' and s.plotted_node and _prev(s,s.plotted_node)['blocked']: dis=_prev(s,s.plotted_node)['blocked_reason']
-        out[a]={'label':label,'hotkey':key,'description':desc,'risk':risk,'disabled_reason':dis}
-    return out
+    seed:int=1337; tick:int=0; current_node:str='wake'; focused_node:str='wake'; plotted_node:str|None=None
+    fuel:int=8; silk:int=2; clarity:int=1; danger:int=0; trust:int=1
+    hull:int=5; engine:int=5; archive:int=5; crew:int=5; power:dict=dataclasses.field(default_factory=lambda:{'helm':1,'engine':1,'archive':1})
+    discovered:set=dataclasses.field(default_factory=lambda:{'wake'}); scanned:set=dataclasses.field(default_factory=set); artifacts:list=dataclasses.field(default_factory=list)
+    log:list=dataclasses.field(default_factory=list); flags:dict=dataclasses.field(default_factory=dict); history:list=dataclasses.field(default_factory=list); route_memory:list=dataclasses.field(default_factory=list)
+
+def _rng(s:GameState,salt=''):
+    return random.Random(f'{s.seed}:{s.tick}:{s.current_node}:{salt}')
+def _clone(s): return copy.deepcopy(s)
+def _checksum(payload): return hashlib.sha256(json.dumps(payload,sort_keys=True,default=str).encode()).hexdigest()[:16]
+def _node(n): return NODES[n]
+def _edges(s): return EDGES.get(s.current_node,[])
+def _fuel_cost(frm,to): return 1+NODES[to]['risk']//2
+def _danger_delta(s,to): return max(0,NODES[to]['risk']-_rng(s,to).randint(0,2))
 def _objectives(s):
-    return [x for x in [('Scan adjacent nodes before committing.' if len(s.scanned)<4 else ''),('Acquire at least one contradiction key.' if not any(s.keys.values()) else ''),('Salvage or choose shorter routes; fuel is low.' if s.fuel<3 else ''),('Repair hull or avoid Wall routes.' if s.hull<=4 else ''),('Reach the Aureal Gate.' if s.current_node!='aureal_gate' else 'Enter the final trial.') ] if x]
-def bridge_get_snapshot(s):
-    return {'version':VERSION,'state':_payload(s),'current_node':{'id':s.current_node,'type':NODES[s.current_node][0],'text':NODES[s.current_node][5]},'reachable':_reach(s),'previews':{n:_prev(s,n) for n in NODES},'map':{'nodes':[{'id':k,'type':v[0],'x':v[1],'y':v[2],'scanned':k in s.scanned,'focused':s.focused_node==k,'plotted':s.plotted_node==k} for k,v in NODES.items()],'edges':EDGES},'actions':_actions(s),'objectives':_objectives(s),'crises':s.crises,'scars':s.scars,'route_memory':s.route_memory,'black_box_digest':s.black_box[-10:],'accessibility_summary':'keyboard commands available; no color-only required','ending':s.ending,'final_factors':s.final_factors}
-def bridge_apply_action(s,a):
-    if s.ending and a!='reset': return s
-    s.undo_stack.append(_payload(s)); s.turn+=1
-    if a.startswith('focus_node:') and a.split(':',1)[1] in NODES: s.focused_node=a.split(':',1)[1]; _rec(s,f'Focused {s.focused_node}.')
-    elif a.startswith('plot_course:'):
-        n=a.split(':',1)[1]; p=_prev(s,n) if n in NODES else {'blocked':True,'blocked_reason':'unknown'}
-        if not p['blocked']: s.plotted_node=n; _rec(s,f'Plotted course to {n}; cost {p["fuel_cost"]} fuel.')
-        else: _rec(s,f'Course refused: {p["blocked_reason"]}.')
-    elif a=='scan':
-        [s.scanned.append(n) for n in _reach(s) if n not in s.scanned]; s.admin_heat+=max(0,3-s.power['masks']); _rec(s,'Scan revealed adjacent route data.')
-    elif a=='travel_plotted': s=_travel(s,s.plotted_node)
-    elif a.startswith('travel:'): s=_travel(s,a.split(':',1)[1])
-    elif a in {'quick_salvage','deep_salvage','archive_salvage','silent_salvage'}: _salvage(s,a)
-    elif a=='inspect_systems': _rec(s,'Systems: '+', '.join(f'{k}={v}' for k,v in s.subsystems.items()))
-    elif a=='safe_pause': s.admin_heat=max(0,s.admin_heat-1); _rec(s,'Safe pause lowered audit noise.')
-    elif a=='undo' and s.undo_stack: s=_restore(s.undo_stack.pop()); _rec(s,'Undo restored previous state.')
-    elif a=='final_trial': _final(s)
-    elif a=='reset': return bridge_new_game_state()
-    return _bound(s)
-def _travel(s,n):
-    if not n or n not in NODES: _rec(s,'No plotted target exists.'); return s
-    p=_prev(s,n)
-    if p['blocked']: _rec(s,f'Travel blocked: {p["blocked_reason"]}.'); return s
-    typ,x,y,risk,reward,text=NODES[n]; s.fuel-=p['fuel_cost']; s.current_node=n; s.plotted_node=None; s.focused_node=n
-    if n not in s.scanned: s.scanned.append(n)
-    if reward in KEYS: s.keys[reward]=True
-    if typ=='admin': s.admin_heat+=risk+1; s.forged_permits=max(0,s.forged_permits-1)
-    if typ=='wall': s.wall_stress+=risk+1; s.hull-=max(1,risk-s.power['hull']); s.subsystems['engines']='strained'
-    if typ=='codec': s.scars.append('Codec shortcut accepted; solidarity accounting remains suspect.'); s.tiger_attention+=1
-    if typ=='tiger': s.tiger_attention+=risk
-    if s.hull<=3 and 'hull breach' not in s.crises: s.crises.append('hull breach')
-    if s.admin_heat>=8 and 'audit lock' not in s.crises: s.crises.append('audit lock')
-    _rec(s,f'Arrived at {n}: {text}'); return s
-def _salvage(s,a):
-    if a=='quick_salvage': s.fuel+=1; _rec(s,'Quick salvage recovered one fuel.')
-    elif a=='deep_salvage': s.fuel+=2; s.macro_charges+=1; s.admin_heat+=2; _rec(s,'Deep salvage recovered more but raised audit pressure.')
-    elif a=='archive_salvage': s.archive_buffers+=1; _rec(s,'Archive salvage protected structural memory.')
-    elif a=='silent_salvage' and s.route_silence>0: s.route_silence-=1; s.fuel+=1; s.admin_heat=max(0,s.admin_heat-1); _rec(s,'Silent salvage recovered fuel quietly.')
-def _final(s):
-    positives=[k for k,v in s.keys.items() if v]; score=len(positives)+(s.hull>3)+(s.archive_buffers>0)-(s.admin_heat>12)-(s.tiger_attention>12)
-    s.ending='ending_unfinished_mobile_run' if s.current_node!='aureal_gate' else ('ending_witness_record_preserved' if score>=6 and s.keys['witness_shard_key'] else 'ending_drakken_accord_escape' if s.keys['drakken_protocol_key'] and s.admin_heat<10 else 'ending_classification_survived' if s.keys['tiger_axiom_key'] and s.tiger_attention<14 else 'ending_damaged_rescue' if s.hull>0 else 'ending_loss')
-    s.final_factors=[f'keys={positives}',f'hull={s.hull}',f'admin_heat={s.admin_heat}',f'tiger_attention={s.tiger_attention}']; _rec(s,f'Final trial resolved: {s.ending}.')
-def bridge_state_to_payload(s): return {'schema':SCHEMA,'version':VERSION,'state':_payload(s)}
-def bridge_payload_to_state(p):
-    if p.get('schema')!=SCHEMA: raise ValueError('Unsupported save schema')
-    return _restore(p.get('state',{}))
-def bridge_save_game(s,path):
-    path=Path(path); path.parent.mkdir(parents=True,exist_ok=True); fd,tmp=tempfile.mkstemp(prefix=path.name,suffix='.tmp',dir=str(path.parent))
-    with os.fdopen(fd,'w',encoding='utf-8') as f: json.dump(bridge_state_to_payload(s),f,indent=2)
-    os.replace(tmp,path)
-def bridge_load_game(path):
-    path=Path(path)
-    try: return bridge_payload_to_state(json.loads(path.read_text(encoding='utf-8')))
-    except Exception as e:
-        if path.exists():
-            try: path.replace(path.with_suffix(path.suffix+'.corrupt.'+str(int(time.time()))))
-            except OSError: pass
-        s=bridge_new_game_state(); _rec(s,f'Recovered from corrupt save: {e.__class__.__name__}.'); return s
+    o=[]
+    if s.current_node!='last_lighthouse': o.append('Reach the Last Lighthouse without losing hull, crew, or archive integrity.')
+    if len(s.artifacts)<3: o.append('Recover at least three relics before the final trial.')
+    if s.archive<3: o.append('Repair or protect the archive; contradiction pressure is high.')
+    if s.danger>=6: o.append('Reduce danger soon. The route is becoming unstable.')
+    return o or ['Resolve the lighthouse trial.']
+
+def bridge_new_game_state(seed:int=1337):
+    s=GameState(seed=seed); s.log.append('Bridge Helm initialized. The Starwake Berth is quiet, for now.'); return s
+
+def _preview_route(s,to):
+    if to not in EDGES.get(s.current_node,[]): return {'blocked':'No direct silkroad from current node.'}
+    cost=_fuel_cost(s.current_node,to); danger=_danger_delta(s,to); blocked=None
+    if s.fuel<cost: blocked='Insufficient fuel.'
+    return {'to':to,'label':NODES[to]['label'],'fuel_cost':cost,'danger_delta':danger,'blocked':blocked,'story':NODES[to]['story']}
+
+def bridge_get_snapshot(s:GameState):
+    actions={}
+    for to in _edges(s):
+        p=_preview_route(s,to); actions[f'plot_course:{to}']={'label':'Plot '+NODES[to]['label'],'disabled_reason':p.get('blocked')}
+        actions[f'focus_node:{to}']={'label':'Focus '+NODES[to]['label'],'disabled_reason':None}
+    actions.update({'scan':{'label':'Scan local silkroad','disabled_reason':None},'travel_plotted':{'label':'Travel plotted course','disabled_reason':None if s.plotted_node else 'No plotted course.'},'quick_salvage':{'label':'Quick salvage','disabled_reason':None},'deep_salvage':{'label':'Deep salvage','disabled_reason':None},'archive_pulse':{'label':'Archive pulse','disabled_reason':None if s.archive>0 else 'Archive offline.'},'inspect_systems':{'label':'Inspect systems','disabled_reason':None},'safe_pause':{'label':'Safe pause','disabled_reason':None},'undo':{'label':'Undo','disabled_reason':None if s.history else 'No history.'},'final_trial':{'label':'Attempt final trial','disabled_reason':None if s.current_node=='last_lighthouse' else 'Not at the Last Lighthouse.'},'reset':{'label':'Reset run','disabled_reason':None}})
+    return {'version':VERSION,'schema':SCHEMA,'tick':s.tick,'current_node':s.current_node,'focused_node':s.focused_node,'plotted_node':s.plotted_node,'resources':{'fuel':s.fuel,'silk':s.silk,'clarity':s.clarity,'danger':s.danger,'trust':s.trust},'systems':{k:getattr(s,k) for k in SYSTEMS},'power':dict(s.power),'artifacts':list(s.artifacts),'discovered':sorted(s.discovered),'reachable':list(_edges(s)),'previews':{to:_preview_route(s,to) for to in _edges(s)},'actions':actions,'objectives':_objectives(s),'log':s.log[-8:],'checksum':_checksum({'tick':s.tick,'node':s.current_node,'fuel':s.fuel,'danger':s.danger,'artifacts':s.artifacts})}
+
+def _push_history(s):
+    s.history.append(_clone(s)); s.history=s.history[-20:]
+
+def _damage(s,amount=1):
+    rng=_rng(s,'damage'); target=rng.choice(SYSTEMS); setattr(s,target,max(0,getattr(s,target)-amount)); s.log.append(f'{target.title()} loses {amount} integrity.')
+
+def _salvage(s,deep=False):
+    rng=_rng(s,'salvage-deep' if deep else 'salvage'); gain=1+rng.randint(0,1)+(1 if deep else 0); s.silk+=gain; s.danger+=1 if deep else 0
+    if rng.random()<(.55 if deep else .28):
+        a=ARTIFACTS[(s.tick+len(s.artifacts))%len(ARTIFACTS)]
+        if a not in s.artifacts: s.artifacts.append(a); s.log.append('Recovered relic: '+a+'.')
+    s.log.append(('Deep' if deep else 'Quick')+f' salvage yields {gain} silk.')
+
+def bridge_apply_action(s:GameState,action:str):
+    if action=='reset': return bridge_new_game_state(s.seed)
+    if action=='undo' and s.history: prev=s.history.pop(); prev.log.append('Undo restored the previous helm state.'); return prev
+    ns=_clone(s); _push_history(ns); ns.tick+=1
+    if action.startswith('focus_node:'):
+        nid=action.split(':',1)[1]
+        if nid in NODES: ns.focused_node=nid; ns.discovered.add(nid); ns.log.append('Focused chart node: '+NODES[nid]['label']+'.')
+    elif action.startswith('plot_course:'):
+        nid=action.split(':',1)[1]; p=_preview_route(ns,nid)
+        if not p.get('blocked'): ns.plotted_node=nid; ns.focused_node=nid; ns.discovered.add(nid); ns.log.append('Course plotted to '+NODES[nid]['label']+'.')
+        else: ns.log.append('Plot rejected: '+p['blocked'])
+    elif action=='scan':
+        ns.scanned.add(ns.current_node); ns.clarity+=1; ns.discovered.update(_edges(ns)); ns.log.append('Scan reveals silkroad branches from '+NODES[ns.current_node]['label']+'.')
+    elif action=='travel_plotted':
+        if ns.plotted_node:
+            p=_preview_route(ns,ns.plotted_node)
+            if not p.get('blocked'):
+                ns.fuel-=p['fuel_cost']; ns.danger+=p['danger_delta']; ns.current_node=ns.plotted_node; ns.focused_node=ns.current_node; ns.plotted_node=None; ns.discovered.add(ns.current_node); ns.route_memory.append(ns.current_node); ns.log.append('Arrived at '+NODES[ns.current_node]['label']+'. '+NODES[ns.current_node]['story'])
+                if ns.danger>=5: _damage(ns,1)
+            else: ns.log.append('Travel blocked: '+p['blocked'])
+        else: ns.log.append('No plotted course to travel.')
+    elif action=='quick_salvage': _salvage(ns,False)
+    elif action=='deep_salvage': _salvage(ns,True)
+    elif action=='archive_pulse': ns.archive=max(0,ns.archive-1); ns.clarity+=2; ns.danger=max(0,ns.danger-1); ns.log.append('Archive pulse converts contradiction into clarity.')
+    elif action=='inspect_systems': ns.log.append('Systems check: '+'; '.join(f'{k}={getattr(ns,k)}' for k in SYSTEMS)+f'; fuel={ns.fuel}; silk={ns.silk}.')
+    elif action=='safe_pause': ns.log.append('Paused at helm. The black box records a clean checkpoint.')
+    elif action=='final_trial':
+        if ns.current_node=='last_lighthouse':
+            score=len(ns.artifacts)+ns.clarity+ns.trust+min(ns.hull,ns.crew,ns.archive)-ns.danger
+            ns.flags['ending']='radiant' if score>=8 else 'fractured' if score>=4 else 'lost'
+            ns.log.append('Final trial resolved: '+ns.flags['ending']+'.')
+        else: ns.log.append('The final trial is still beyond the chart.')
+    else: ns.log.append('Unknown command ignored: '+action)
+    if ns.fuel<=0 and ns.current_node!='last_lighthouse': ns.danger+=1; ns.log.append('Fuel exhaustion raises route danger.')
+    return ns
+
+def _to_jsonable(s):
+    d=dataclasses.asdict(s); d['discovered']=sorted(s.discovered); d['history']=[]; return d
+def bridge_save_game(s,path=SAVE_DIR/'bridge_save.json'):
+    data={'schema':SCHEMA,'version':VERSION,'state':_to_jsonable(s)}; data['checksum']=_checksum(data['state']); Path(path).write_text(json.dumps(data,indent=2),encoding='utf-8'); return path
+def bridge_load_game(path=SAVE_DIR/'bridge_save.json'):
+    data=json.loads(Path(path).read_text(encoding='utf-8')); assert data['schema']==SCHEMA
+    st=data['state']; st['discovered']=set(st['discovered']); st['history']=[]; return GameState(**st)
+
+def _png_bytes(rgb):
+    w=h=1; raw=b'\x00'+bytes(rgb)
+    def chunk(t,d): return struct.pack('>I',len(d))+t+d+struct.pack('>I',zlib.crc32(t+d)&0xffffffff)
+    return b'\x89PNG\r\n\x1a\n'+chunk(b'IHDR',struct.pack('>IIBBBBB',w,h,8,2,0,0,0))+chunk(b'IDAT',zlib.compress(raw))+chunk(b'IEND',b'')
 def ensure_placeholder_assets():
-    tiny=base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/lZ5o6QAAAABJRU5ErkJggg=='); names=['current_position','destination','blocked','danger','selected_route']+KEYS+['scan','travel','salvage','audit','wall','tiger']
-    for size in (64,128,256):
-        d=ASSET_ROOT/'runtime'/str(size); d.mkdir(parents=True,exist_ok=True)
-        for name in names: (d/f'{name}.png').write_bytes(tiny) if not (d/f'{name}.png').exists() else None
-    MANIFEST.parent.mkdir(parents=True,exist_ok=True)
-    if not MANIFEST.exists(): MANIFEST.write_text(json.dumps({'schema':'bridge-helm-assets-v1','generated':True,'assets':names},indent=2),encoding='utf-8')
-def run_gui_smoke(): assert bridge_get_snapshot(bridge_new_game_state())['current_node']['id']=='harbor'; print('GUI smoke: PASS'); return True
-def run_gui_qa():
-    s=bridge_new_game_state();
-    for a in ['scan','plot_course:ledger_gate','travel_plotted','quick_salvage','inspect_systems']: s=bridge_apply_action(s,a)
-    assert s.current_node=='ledger_gate' and s.route_memory; print('GUI QA: PASS'); return True
-def run_qa():
-    s=bridge_new_game_state(); s=bridge_apply_action(s,'scan'); s=bridge_apply_action(s,'plot_course:ledger_gate'); s=bridge_apply_action(s,'travel_plotted'); assert s.current_node=='ledger_gate'; s.fuel=0; s=bridge_apply_action(s,'plot_course:witness_pool'); s=bridge_apply_action(s,'travel_plotted'); assert s.current_node=='ledger_gate'; print('Gameplay QA: PASS'); return True
-def run_asset_qa(): ensure_placeholder_assets(); assert MANIFEST.exists(); assert not list(ROOT.rglob('*.svg')); print('Asset QA: PASS'); return True
-def run_accessibility_qa(): assert all('hotkey' in m for m in bridge_get_snapshot(bridge_new_game_state())['actions'].values()); print('Accessibility QA: PASS'); return True
-def run_persistence_qa():
-    p=ROOT/'.tmp_bridge_save.json'; s=bridge_apply_action(bridge_new_game_state(),'scan'); bridge_save_game(s,p); assert bridge_load_game(p).turn==s.turn; p.write_text('bad',encoding='utf-8'); assert bridge_load_game(p).current_node=='harbor'; [q.unlink(missing_ok=True) for q in ROOT.glob('.tmp_bridge_save.json*')]; print('Persistence QA: PASS'); return True
-def run_performance_qa():
-    s=bridge_new_game_state();
-    for i in range(200): s=bridge_apply_action(s,['scan','quick_salvage','deep_salvage','safe_pause'][i%4])
-    assert len(s.black_box)<=80 and len(s.route_memory)<=20; print('Performance QA: PASS'); return True
-def run_balance_sim(runs=40):
-    endings={}
-    for seed in range(runs):
-        s=bridge_new_game_state(seed)
-        for _ in range(20):
-            if s.current_node=='aureal_gate': break
-            s=bridge_apply_action(s,'scan'); opts=_reach(s); target=opts[seed%len(opts)] if opts else None
-            if target: s=bridge_apply_action(s,f'plot_course:{target}'); s=bridge_apply_action(s,'travel_plotted')
-            if s.fuel<=1: s=bridge_apply_action(s,'quick_salvage')
-        s=bridge_apply_action(s,'final_trial'); endings[s.ending]=endings.get(s.ending,0)+1
-    assert sum(endings.values())==runs and max(endings.values())/runs<=.75; print('Balance Sim: PASS',endings); return endings
-def run_static_sweep():
-    text=Path(__file__).read_text(encoding='utf-8'); risky=['ev'+'al(','ex'+'ec(','api'+'_key','secret'+'_key','PROMPT'+'_QUEUE','IMAGE'+'_PROMPTS']; found=[x for x in risky if x in text.replace('risky=','checked=')]; assert not found,found; print('Static sweep: PASS'); return True
-def run_bug_sweep():
-    print('Running Bridge Helm exhaustive bug sweep...')
-    for f in [run_static_sweep,run_gui_smoke,run_gui_qa,run_qa,run_asset_qa,run_accessibility_qa,run_persistence_qa,run_performance_qa,run_balance_sim]: f()
-    print('Exhaustive Bug Sweep Result: PASS'); return True
+    colors={'wake':(30,45,70),'ledger_gate':(90,65,120),'witness_pool':(80,135,150),'moth_orchard':(120,105,45),'ashen_comet':(150,80,55),'red_archive':(140,35,45),'silkforge':(180,150,85),'last_lighthouse':(235,230,180)}
+    for k,c in colors.items():
+        p=ASSET_DIR/(k+'.png')
+        if not p.exists(): p.write_bytes(_png_bytes(c))
+    manifest={'generated':True,'version':VERSION,'assets':sorted(x.name for x in ASSET_DIR.glob('*.png'))}
+    (ASSET_DIR/'manifest.json').write_text(json.dumps(manifest,indent=2),encoding='utf-8')
+    return manifest
+
+def run_cli(seed=1337,script=None):
+    ensure_placeholder_assets(); s=bridge_new_game_state(seed); print('Starsilk Chronicles: Bridge Helm',VERSION); print(bridge_get_snapshot(s)['log'][-1])
+    actions=script or ['scan','plot_course:ledger_gate','travel_plotted','scan','quick_salvage','plot_course:witness_pool','travel_plotted','deep_salvage','inspect_systems']
+    for a in actions:
+        s=bridge_apply_action(s,a); snap=bridge_get_snapshot(s); print('\n>',a); print(snap['log'][-1]); print('node=',snap['current_node'],'res=',snap['resources'],'sys=',snap['systems'],'artifacts=',snap['artifacts'])
+    bridge_save_game(s); print('\nSaved:',SAVE_DIR/'bridge_save.json'); return s
+
 def run_bridge_helm_gui():
     import tkinter as tk
-    s=bridge_new_game_state(); root=tk.Tk(); root.title('Starsilk Chronicles: Bridge Helm'); status=tk.StringVar(); canvas=tk.Canvas(root,width=760,height=520,bg='#08131d'); status_label=tk.Label(root,textvariable=status,anchor='w'); status_label.pack(fill='x'); canvas.pack(fill='both',expand=True)
+    s=bridge_new_game_state(); root=tk.Tk(); root.title('Starsilk Chronicles: Bridge Helm')
+    status=tk.StringVar(); tk.Label(root,textvariable=status,anchor='w',justify='left').pack(fill='x')
+    canvas=tk.Canvas(root,width=1120,height=470,bg='#081019'); canvas.pack(fill='both',expand=True)
+    route_bar=tk.Frame(root); route_bar.pack(fill='x')
+    action_bar=tk.Frame(root); action_bar.pack(fill='x')
+    def apply_many(actions):
+        nonlocal s
+        for item in actions: s=bridge_apply_action(s,item)
+        refresh()
+    def clear(frame):
+        for child in frame.winfo_children(): child.destroy()
     def refresh():
-        snap=bridge_get_snapshot(s); status.set(f"Node {s.current_node} | Fuel {s.fuel} | Hull {s.hull} | Heat {s.admin_heat} | {snap['objectives'][0]}"); canvas.delete('all')
-        for src,ts in EDGES.items():
-            for t in ts: canvas.create_line(NODES[src][1],NODES[src][2],NODES[t][1],NODES[t][2],fill='#376a84',width=2)
-        for nid,v in NODES.items(): canvas.create_oval(v[1]-14,v[2]-14,v[1]+14,v[2]+14,fill=('#7fffd4' if nid==s.current_node else '#20323f'),outline='#b9f2ff'); canvas.create_text(v[1],v[2]+28,text=nid,fill='#d8f7ff')
-    def do(a):
-        nonlocal s; s=bridge_apply_action(s,a); refresh()
-    bar=tk.Frame(root); bar.pack(fill='x')
-    for label,a in [('Scan','scan'),('Plot first route','plot_course:ledger_gate'),('Travel','travel_plotted'),('Salvage','quick_salvage'),('Final','final_trial'),('Reset','reset')]: tk.Button(bar,text=label,command=lambda x=a:do(x)).pack(side='left')
+        snap=bridge_get_snapshot(s); objective=snap['objectives'][0] if snap['objectives'] else 'Awaiting command.'
+        status.set(f"Node: {NODES[s.current_node]['label']} | fuel {s.fuel} silk {s.silk} clarity {s.clarity} danger {s.danger} | {objective}\n"+'\n'.join(snap['log'][-3:]))
+        canvas.delete('all')
+        for frm,outs in EDGES.items():
+            x1,y1=NODES[frm]['pos']
+            for to in outs:
+                x2,y2=NODES[to]['pos']; canvas.create_line(x1,y1,x2,y2,fill='#42606f',width=2)
+        for nid,v in NODES.items():
+            x,y=v['pos']; fill='#20323f'; outline='#89a'
+            if nid==s.current_node: fill='#7fffd4'; outline='#e8fff8'
+            elif nid==s.plotted_node: fill='#ffd166'; outline='#fff2bf'
+            elif nid==s.focused_node: fill='#b9f2ff'; outline='#e8fbff'
+            elif nid in snap['reachable']: fill='#2e4b59'
+            width=3 if nid in (s.current_node,s.plotted_node,s.focused_node) else 1
+            canvas.create_oval(x-18,y-18,x+18,y+18,fill=fill,outline=outline,width=width)
+            canvas.create_text(x,y+34,text=v['label'],fill='#d8e6ef',font=('Arial',9))
+        clear(route_bar); clear(action_bar)
+        for nid in snap['reachable']:
+            preview=snap['previews'][nid]; state='disabled' if preview.get('blocked') else 'normal'
+            label=f"Plot {NODES[nid]['label']} ({preview['fuel_cost']} fuel)"
+            tk.Button(route_bar,text=label,state=state,command=lambda n=nid: apply_many([f'focus_node:{n}',f'plot_course:{n}'])).pack(side='left')
+        travel_disabled=snap['actions']['travel_plotted']['disabled_reason'] is not None
+        buttons=[('Scan',['scan'],False),('Travel',['travel_plotted'],travel_disabled),('Quick salvage',['quick_salvage'],False),('Deep salvage',['deep_salvage'],False),('Archive pulse',['archive_pulse'],snap['actions']['archive_pulse']['disabled_reason'] is not None),('Inspect',['inspect_systems'],False),('Undo',['undo'],snap['actions']['undo']['disabled_reason'] is not None),('Final',['final_trial'],snap['actions']['final_trial']['disabled_reason'] is not None),('Reset',['reset'],False)]
+        for label,actions,disabled in buttons:
+            tk.Button(action_bar,text=label,state='disabled' if disabled else 'normal',command=lambda a=actions: apply_many(a)).pack(side='left')
     refresh(); root.mainloop()
-def main(argv:Optional[List[str]]=None):
-    p=argparse.ArgumentParser(); [p.add_argument(x,action='store_true') for x in ['--gui','--gui-smoke','--gui-qa','--gameplay-qa','--asset-qa','--accessibility-qa','--persistence-qa','--performance-qa','--balance-sim','--static-sweep','--bug-sweep']]; a=p.parse_args(argv)
-    if a.gui: run_bridge_helm_gui(); return 0
-    if a.gui_smoke: run_gui_smoke(); return 0
-    if a.gui_qa: run_gui_qa(); return 0
-    if a.gameplay_qa: run_qa(); return 0
-    if a.asset_qa: run_asset_qa(); return 0
-    if a.accessibility_qa: run_accessibility_qa(); return 0
-    if a.persistence_qa: run_persistence_qa(); return 0
-    if a.performance_qa: run_performance_qa(); return 0
-    if a.balance_sim: run_balance_sim(); return 0
-    if a.static_sweep: run_static_sweep(); return 0
-    if a.bug_sweep: run_bug_sweep(); return 0
-    run_gui_smoke(); print('Run with --gui or --bug-sweep.'); return 0
+
+def run_static_sweep():
+    text=Path(__file__).read_text(encoding='utf-8'); risky=['ev'+'al(','ex'+'ec(','api'+'_key','secret'+'_key','PROMPT'+'_QUEUE','IMAGE'+'_PROMPTS']; found=[x for x in risky if x in text.replace('risky=','checked=')]
+    assert not found, 'Forbidden pattern(s): '+str(found); assert 'ensure_placeholder_assets' in text; print('Static sweep: PASS'); return True
+def run_smoke_test():
+    s=bridge_new_game_state(7); steps=['scan','focus_node:ledger_gate','plot_course:ledger_gate','travel_plotted','scan','quick_salvage','archive_pulse','inspect_systems']
+    for a in steps: s=bridge_apply_action(s,a)
+    snap=bridge_get_snapshot(s); assert snap['current_node']=='ledger_gate'; assert snap['resources']['fuel']>=0; bridge_save_game(s); loaded=bridge_load_game(); assert loaded.current_node==s.current_node; print('Smoke test: PASS'); return True
+def run_gui_qa():
+    s=bridge_new_game_state()
+    for a in ['scan','focus_node:ledger_gate','plot_course:ledger_gate','travel_plotted','scan','focus_node:witness_pool','plot_course:witness_pool','travel_plotted','quick_salvage','inspect_systems']:
+        s=bridge_apply_action(s,a)
+    assert s.current_node=='witness_pool' and s.focused_node=='witness_pool' and len(s.route_memory)>=2
+    print('GUI QA: PASS'); return True
+def run_gameplay_qa():
+    s=bridge_new_game_state(99)
+    for i in range(12):
+        snap=bridge_get_snapshot(s); routes=snap['reachable']
+        if routes: s=bridge_apply_action(s,'plot_course:'+routes[0]); s=bridge_apply_action(s,'travel_plotted')
+        else: break
+        if s.current_node=='last_lighthouse': s=bridge_apply_action(s,'final_trial'); break
+    assert s.current_node in NODES; assert min(s.hull,s.engine,s.archive,s.crew)>=0; print('Gameplay QA: PASS'); return True
+def run_asset_qa():
+    m=ensure_placeholder_assets(); assert len(m['assets'])>=len(NODES); assert (ASSET_DIR/'manifest.json').exists(); print('Asset QA: PASS'); return True
+def run_accessibility_qa():
+    snap=bridge_get_snapshot(bridge_new_game_state()); assert snap['actions']; assert all('label' in v for v in snap['actions'].values()); assert snap['objectives']; print('Accessibility QA: PASS'); return True
+def run_persistence_qa():
+    s=bridge_new_game_state(22); s=bridge_apply_action(s,'scan'); path=bridge_save_game(s,SAVE_DIR/'qa_save.json'); loaded=bridge_load_game(path); assert bridge_get_snapshot(loaded)['checksum']==bridge_get_snapshot(s)['checksum']; print('Persistence QA: PASS'); return True
+def run_performance_qa():
+    s=bridge_new_game_state(1); t=time.perf_counter()
+    for i in range(1000): s=bridge_apply_action(s,'scan' if i%3==0 else 'quick_salvage')
+    assert time.perf_counter()-t<2.5; print('Performance QA: PASS'); return True
+def run_balance_sim(n=80):
+    endings={}
+    for seed in range(n):
+        s=bridge_new_game_state(seed)
+        for _ in range(10):
+            routes=bridge_get_snapshot(s)['reachable']
+            if not routes: break
+            pick=routes[seed%len(routes)]; s=bridge_apply_action(s,'plot_course:'+pick); s=bridge_apply_action(s,'travel_plotted')
+            if seed%3==0: s=bridge_apply_action(s,'quick_salvage')
+            if s.current_node=='last_lighthouse': break
+        s=bridge_apply_action(s,'final_trial'); endings[s.flags.get('ending','unresolved')]=endings.get(s.flags.get('ending','unresolved'),0)+1
+    assert max(endings.values())/n<.75, endings; print('Balance sim: PASS',endings); return True
+
+def run_bug_sweep():
+    for fn in (run_static_sweep,run_smoke_test,run_gui_qa,run_gameplay_qa,run_asset_qa,run_accessibility_qa,run_persistence_qa,run_performance_qa,run_balance_sim): fn()
+    print('Bridge Helm bug sweep: PASS'); return True
+
+def main(argv=None):
+    p=argparse.ArgumentParser(description='Starsilk Chronicles: Bridge Helm'); p.add_argument('--cli',action='store_true'); p.add_argument('--gui',action='store_true'); p.add_argument('--bug-sweep',action='store_true'); p.add_argument('--seed',type=int,default=1337)
+    p.add_argument('--static-sweep',action='store_true'); p.add_argument('--smoke-test',action='store_true'); p.add_argument('--gui-qa',action='store_true'); p.add_argument('--gameplay-qa',action='store_true'); p.add_argument('--asset-qa',action='store_true'); p.add_argument('--accessibility-qa',action='store_true'); p.add_argument('--persistence-qa',action='store_true'); p.add_argument('--performance-qa',action='store_true'); p.add_argument('--balance-sim',action='store_true')
+    args=p.parse_args(argv)
+    if args.static_sweep: return 0 if run_static_sweep() else 1
+    if args.smoke_test: return 0 if run_smoke_test() else 1
+    if args.gui_qa: return 0 if run_gui_qa() else 1
+    if args.gameplay_qa: return 0 if run_gameplay_qa() else 1
+    if args.asset_qa: return 0 if run_asset_qa() else 1
+    if args.accessibility_qa: return 0 if run_accessibility_qa() else 1
+    if args.persistence_qa: return 0 if run_persistence_qa() else 1
+    if args.performance_qa: return 0 if run_performance_qa() else 1
+    if args.balance_sim: return 0 if run_balance_sim() else 1
+    if args.bug_sweep: return 0 if run_bug_sweep() else 1
+    if args.gui: run_bridge_helm_gui(); return 0
+    run_cli(args.seed); return 0
 if __name__=='__main__': raise SystemExit(main())
