@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+.tmp_bridge_save.json*
+/assets/bridge_helm/runtime/
