@@ -21,17 +21,42 @@ Deliver a runnable Bridge Helm project through GitHub despite the container lack
 - Added additive project Bible
 - Added `.gitignore`
 - Added placeholder runtime asset generator: `tools/generate_bridge_assets.py`
+- Added committed optimized PNG art pack under `assets/bridge_helm`
 - Included built-in QA commands for GUI smoke, gameplay, assets, accessibility, persistence, performance, balance, static sweep, and exhaustive bug sweep
 
 ### Mechanics
 
-The project currently implements a route-planning exploration loop with scan, focus, plot, travel, salvage, archive pulse, inspect, undo, reset, subsystem damage, final trial resolution, and run memory. The Tkinter GUI now exposes dynamically reachable route plotting controls instead of a single hardcoded first route.
+The project now implements a route-planning exploration loop with scan, focus, plot, travel, salvage, archive pulse, inspect, undo, reset, subsystem damage, final trial resolution, run memory, explicit crew assignment, explicit power reassignment, emergency actions, and node/route storylets with distinct consequences.
 
-The code includes state fields for crew and power, but explicit crew assignment, power reassignment, emergency-action interfaces, contradiction-key mechanics, and black-box recap presentation are not implemented yet. Those are production targets, not completed mechanics.
+Crew roles are assigned to stations:
+
+- Navigator at helm improves route danger handling.
+- Engineer at engine improves fuel efficiency.
+- Archivist at archive improves scan clarity and relic recovery chance.
+- Medic at repair can stabilize damaged systems during salvage.
+
+Power can be routed to helm, engine, or archive. The powered station gains stronger effects until power is reassigned.
+
+Emergency actions are implemented:
+
+- Brace: spends silk to repair hull while stressing crew.
+- Vent: spends silk to reduce danger while stressing archive.
+- Reroute: spends silk and engine integrity to recover fuel.
+
+Storylets are implemented at route and node level. Route events create distinct travel consequences, while node storylets resolve through the current story posture: steady, bold, or merciful.
 
 ### Asset note
 
-The large PNG art package from the ChatGPT delivery environment was not committed by the connector because the available GitHub tool cannot stage local binary trees. The repository engine can generate placeholder PNG runtime files through `tools/generate_bridge_assets.py` or during `--asset-qa`; those generated files are ignored by Git.
+The repository now includes a compact committed PNG art pack:
+
+- 8 node visuals
+- 5 relic icons
+- 4 system-status icons
+- 3 route-state assets
+- 3 ending-state assets
+- manifest: `assets/bridge_helm/manifest.json`
+
+Runtime placeholder generation remains as a fallback only when committed art assets are missing.
 
 ### Validation commands
 
@@ -43,10 +68,10 @@ python3 bridge-helm-launcher.py --bug-sweep
 
 ### Known limitations
 
-- The committed repo uses placeholder-generated asset files rather than the full 68 MB local art package.
-- Explicit crew assignment, power tradeoffs, emergency actions, contradiction-key play, and black-box recap presentation remain unimplemented.
 - Human playtesting remains unverified.
 - Tkinter GUI is functional but not final production visual polish.
+- The art pack is compact committed production-slice art, not final commissioned art.
+- Audio cues are still absent.
 
 ### Do-not-touch warnings
 
@@ -56,11 +81,11 @@ python3 bridge-helm-launcher.py --bug-sweep
 
 ### Remaining work
 
-1. Replace placeholder-generated assets with a real optimized art pack for the eight chart locations, route lines, relic icons, system-status icons, and ending states.
-2. Implement explicit crew assignment, power reassignment, and emergency actions so the existing crew and power state fields become meaningful player decisions.
-3. Expand authored route storylets and event chains so each node has distinct choices, consequences, and replay texture.
-4. Add richer visible animation, sound cues, readable map states, and more polished status surfaces.
-5. Human-playtest balance and dominant strategies after the mechanics pass.
+1. Polish GUI layout and information hierarchy now that crew, power, emergencies, and story posture all exist.
+2. Add audio cues for scan, plot, travel, salvage, emergency actions, damage, relic recovery, and final trial.
+3. Expand storylet count and add more multi-step consequences for repeat play.
+4. Human-playtest balance and dominant strategies after the mechanics pass.
+5. Replace compact generated-style art with final commissioned art when art direction is locked.
 
 ### Commit record
 

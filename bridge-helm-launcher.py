@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Launcher wrapper for Starsilk Chronicles: Bridge Helm."""
 from __future__ import annotations
+
 import importlib.util
-from pathlib import Path
 import sys
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 ENGINE = ROOT / "starsilk-chronicles-final.py"
@@ -22,6 +23,7 @@ def load_engine():
 def main(argv=None) -> int:
     module = load_engine()
     return int(module.main(argv))
+
 
 if __name__ == "__main__":
     raise SystemExit(main(sys.argv[1:]))

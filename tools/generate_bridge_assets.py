@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate placeholder Bridge Helm runtime assets."""
+"""Generate fallback Bridge Helm runtime assets when committed assets are absent."""
 from __future__ import annotations
 
 import importlib.util
@@ -23,8 +23,9 @@ def load_engine():
 
 def main() -> int:
     module = load_engine()
-    module.ensure_placeholder_assets()
-    print("Generated Bridge Helm placeholder runtime assets.")
+    manifest = module.ensure_placeholder_assets()
+    status = "committed" if not manifest.get("generated") else "fallback"
+    print(f"Bridge Helm asset manifest ready ({status}).")
     return 0
 
 

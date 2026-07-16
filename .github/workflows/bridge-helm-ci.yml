@@ -15,7 +15,7 @@ jobs:
           python-version: '3.12'
       - name: Compile
         run: python3 -m py_compile starsilk-chronicles-final.py bridge-helm-launcher.py tools/generate_bridge_assets.py
-      - name: Generate placeholder assets
+      - name: Prepare asset manifest
         run: python3 tools/generate_bridge_assets.py
       - name: Bug sweep
         run: python3 bridge-helm-launcher.py --bug-sweep
