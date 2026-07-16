@@ -1,0 +1,70 @@
+{
+  "route_events": {
+    "ledger_gate->moth_orchard": {
+      "text": "The orchard accepts the ledger's stamped shadow, but charges one breath of engine heat.",
+      "fuel": 1,
+      "danger": -1,
+      "damage": ["engine", 1]
+    },
+    "red_archive->last_lighthouse": {
+      "text": "The red archive recites every route the crew forgot to mourn.",
+      "fuel": 0,
+      "danger": 1,
+      "trust": 1
+    }
+  },
+  "node_storylets": {
+    "wake": {
+      "steady": {
+        "text": "Run the preflight litany until every bell answers in order.",
+        "effects": {"clarity": 1}
+      },
+      "bold": {
+        "text": "Launch before the berth finishes counting your name.",
+        "effects": {"fuel": 1, "danger": 1}
+      },
+      "merciful": {
+        "text": "Leave a lamp for the dockhands who will not see you return.",
+        "effects": {"trust": 1, "silk": -1}
+      }
+    }
+  },
+  "event_chains": {
+    "witness_pool->ashen_comet": {
+      "visits": 1,
+      "text": "The pool's reflection clings to the comet ash and reveals a second-safe angle.",
+      "effects": {"clarity": 1, "danger": -1}
+    },
+    "red_archive->silkforge": {
+      "visits": 1,
+      "text": "The forge recognizes the archive's red index and discounts the next repair with old debt.",
+      "effects": {"silk": 1, "hull": 1}
+    }
+  },
+  "relic_gates": {
+    "last_lighthouse": {
+      "steady": {
+        "relic": "lighthouse wick",
+        "text": "The lighthouse wick drinks the white beam and steadies the answer.",
+        "effects": {"clarity": 2, "danger": -1}
+      },
+      "merciful": {
+        "relic": "silkglass compass",
+        "text": "The silkglass compass points toward the route that still remembers mercy.",
+        "effects": {"trust": 2}
+      }
+    },
+    "red_archive": {
+      "bold": {
+        "relic": "archive-red key",
+        "text": "The archive-red key cools in your palm and unlocks the contradiction safely.",
+        "effects": {"danger": -2, "clarity": 1}
+      }
+    }
+  },
+  "ending_epilogues": {
+    "radiant": "The Last Lighthouse writes the crew into the chart as a living constellation.",
+    "fractured": "The ship returns with a usable map and a few locked rooms no one can yet name.",
+    "lost": "The final beam burns the route into warning glass for the next Bridge Helm."
+  }
+}

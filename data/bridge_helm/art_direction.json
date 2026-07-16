@@ -1,0 +1,35 @@
+{
+  "title": "Starsilk Chronicles Bridge Helm Art Direction",
+  "version": "1.4.0-production-slice-alpha",
+  "style": {
+    "keywords": [
+      "storybook star-map",
+      "silkglass instruments",
+      "luminous ink",
+      "hand-painted UI sprite language",
+      "high contrast readable silhouettes"
+    ],
+    "palette": {
+      "void": "#081019",
+      "ink": "#162531",
+      "silk": "#f2d28b",
+      "aqua": "#7fffd4",
+      "signal": "#ff6f61",
+      "archive_red": "#9f2f45",
+      "lighthouse": "#fff0ba"
+    }
+  },
+  "asset_targets": {
+    "node_scene": "320x180 PNG with a readable landmark silhouette, route glow, and node-specific color accent.",
+    "relic_icon": "96x96 transparent-feeling icon composition on dark plate, readable at 32px.",
+    "system_icon": "96x96 UI status sprite with simple silhouette and damage-state highlight compatibility.",
+    "route_state": "128x48 UI strip showing available, plotted, or blocked state.",
+    "ending_splash": "320x180 final-state image with strong value contrast and distinct emotional read."
+  },
+  "state_variants": [
+    "normal",
+    "warning",
+    "critical",
+    "recovered"
+  ]
+}

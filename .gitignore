@@ -4,3 +4,7 @@ __pycache__/
 .DS_Store
 .tmp_bridge_save.json*
 /assets/bridge_helm/runtime/
+/assets/bridge_helm/**/*.png
+/assets/bridge_helm/bridge_helm_art_pack.zip
+/audio/bridge_helm/*.wav
+/audio/bridge_helm/bridge_helm_audio_pack.zip

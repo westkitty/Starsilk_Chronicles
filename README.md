@@ -5,7 +5,7 @@ A local-first Python/Tkinter tactical exploration alpha for **Starsilk Chronicle
 The Bridge Helm loop is:
 
 ```text
-scan sector -> assign crew/power -> inspect route previews -> choose story posture -> plot a course -> commit travel -> salvage or trigger emergencies -> survive the final explanation
+scan sector -> assign crew/power -> inspect route previews -> choose story posture -> plot a course -> commit travel -> salvage or trigger emergencies -> resolve event chains -> survive the final explanation
 ```
 
 ## Run
@@ -18,6 +18,7 @@ python3 bridge-helm-launcher.py --gui
 
 ```bash
 python3 -m py_compile starsilk-chronicles-final.py bridge-helm-launcher.py tools/generate_bridge_assets.py
+python3 tools/build_production_assets.py
 python3 tools/generate_bridge_assets.py
 python3 bridge-helm-launcher.py --bug-sweep
 ```
@@ -37,4 +38,4 @@ python3 bridge-helm-launcher.py --balance-sim
 
 ## Current delivery note
 
-The repository now includes a compact committed PNG art pack under `assets/bridge_helm`: eight node visuals, five relic icons, four system icons, three route-state assets, three ending-state assets, and a manifest. Runtime placeholder generation remains as a fallback only when committed assets are missing.
+The repository now includes committed production-slice pack payloads under `assets/bridge_helm/bridge_helm_art_pack/` and `audio/bridge_helm/bridge_helm_audio_pack/`. The runtime reconstructs and extracts eight node scenes, five relic icons, system icons with state variants, route-state assets, ending splashes, and audio cues from those payloads when needed. Runtime placeholder generation remains as a fallback only when committed packs are missing.

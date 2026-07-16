@@ -87,6 +87,29 @@ python3 bridge-helm-launcher.py --bug-sweep
 4. Human-playtest balance and dominant strategies after the mechanics pass.
 5. Replace compact generated-style art with final commissioned art when art direction is locked.
 
+## 2026-07-15 - Production-slice advancement pass
+
+### Implemented
+
+- Added explicit art direction data: `data/bridge_helm/art_direction.json`
+- Moved expandable story content into `data/bridge_helm/storylets.json`
+- Added deterministic production-slice asset/audio builder: `tools/build_production_assets.py`
+- Rebuilt the committed asset pack payload under `assets/bridge_helm/bridge_helm_art_pack/` with node scenes, relic icons, route states, ending splashes, and system state variants
+- Added `audio/bridge_helm/bridge_helm_audio_pack/` with WAV cue payloads for scan, plot, travel, salvage, emergency, damage, relic reveal, and final trial feedback
+- Added crew fatigue, injuries, emergency cooldowns, emergency cost scaling, and station synergy effects
+- Added event chains, relic-gated storylet bonuses, route memory exposure, final epilogues, and feedback hooks for audio/animation presentation
+
+### Validation posture
+
+Automated checks can verify compile, data loading, asset/audio presence, state serialization, deterministic simulation, and mechanic invariants. Human playtest balance remains unverified and must not be claimed as complete.
+
+### Current limitations
+
+- Art is production-slice generated art, not final commissioned art.
+- GUI animation is a feedback hook layer, not a polished cinematic presentation.
+- Balance evidence is scripted simulation only; human playtest results are still required.
+- Audio cues are simple generated WAV cues and need final sound design.
+
 ### Commit record
 
 - Seed commit: `dd386cac0198c0cee955258c9887c1aa70f799ea`
